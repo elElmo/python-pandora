@@ -3,44 +3,33 @@ import urllib2
 from connection import PandoraConnection
 
 class Pandora(object):
-	station_id = None
-	authenticated = False
 	backlog = []
 	
-	def __init__(self):
-		self.connection = PandoraConnection()
+	def __init__(self, connection):
+		self.connection = connection
 	
 	def authenticate(self, username, password):
-		self.authenticated = self.connection.authenticate(username, password)
-		return self.authenticated
+		return self.connection.get_user_authentication(username, password)
 		
-	def get_station_list(self):
-		return self.connection.get_stations()
+	def get_station_list(self, user):
+		return self.connection.get_stations(user)
 	
-	def switch_station(self, station_id):
-		if type(station_id) is dict:
-			station_id = station_id['stationId']
-		
-		if not self.authenticated: raise ValueError("User not yet authenticated")
-		
+	def switch_station(self, user, station_id):
 		self.backlog = []
-		self.station_id = station_id
-		self.backlog = self.connection.get_fragment(station_id) + self.backlog
+		self.backlog = self.connection.get_fragment(user, station_id) + self.backlog
 	
-	def get_next_song(self):
-		if not self.authenticated: raise ValueError("User not yet authenticated")
-		if not self.station_id: raise ValueError("No station selected")
-		
+	def get_next_song(self, user, stationId):
 		# get more songs
 		if len(self.backlog) < 2:
-			self.backlog = self.connection.get_fragment(self.station_id) + self.backlog
+			self.backlog = self.connection.get_fragment(user, station_id) + self.backlog
 		
 		# get next song
 		return self.backlog.pop()
 		
 		
 if __name__ == "__main__":
-	pandora = Pandora()
+	connection = PandoraConnection()
+	pandora = Pandora(connection)
 	
 	# read username
 	print "Username: "
@@ -59,25 +48,28 @@ if __name__ == "__main__":
 		urllib2.install_opener(opener)
 	
 	# authenticate
-	print "Authenthicated: " + str(pandora.authenticate(username, password))
+	user = pandora.authenticate(username, password)
+	print "Authenthicated: " + str(user)
 	
 	# output stations (without QuickMix)
 	print "users stations:"
-	for station in pandora.getStationList():
+	for station in pandora.get_station_list(user):
 		if station['isQuickMix']: 
 			quickmix = station
 			print "\t" + station['stationName'] + "*"
 		else:
 			print "\t" + station['stationName']
 	
+	print "\n\n\n"
+	quickmix = quickmix['stationId'] if type(quickmix) is dict else quickmix
 	# switch to quickmix station
-	pandora.switchStation(quickmix)
+	pandora.switch_station(user, quickmix)
 	
 	# get one song from quickmix
 	print "next song from quickmix:"
-	next =  pandora.getNextSong()
-	print next['artistName'] + ': ' + next['songName']
-	print next['audioUrlMap']['highQuality']['audioUrl']
+	n =  pandora.get_next_song(user, quickmix)
+	print n['artistName'] + ': ' + n['songName']
+	print n['audioUrlMap']['highQuality']['audioUrl']
 	
 	# download it
 	#u = urllib2.urlopen(next['audioUrlMap']['highQuality']['audioUrl'])

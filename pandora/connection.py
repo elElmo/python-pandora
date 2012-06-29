@@ -13,9 +13,6 @@ class PandoraConnection(object):
 	partner_id = None
 	partner_auth_token = None
 	
-	user_id = None
-	user_auth_token = None
-	
 	time_offset = None
 	
 	PROTOCOL_VERSION = '5'
@@ -29,52 +26,60 @@ class PandoraConnection(object):
 	def __init__(self):
 		self.rid = "%07i" % (time.time() % 1e7)
 		self.timedelta = 0
+		self.authenticate_connection()
 		
-	def authenticate(self, user, pwd):
+	def authenticate_connection(self):
 		try:
 			# partner login
-			partner = self.do_request('auth.partnerLogin', True, False, deviceModel=self.DEVICE_MODEL, username=self.PARTNER_USERNAME, password=self.PARTNER_PASSWORD, version=self.PROTOCOL_VERSION)
+			partner = self.do_request('auth.partnerLogin', True, False, None, deviceModel=self.DEVICE_MODEL, username=self.PARTNER_USERNAME, password=self.PARTNER_PASSWORD, version=self.PROTOCOL_VERSION)
 			self.partner_id = partner['partnerId']
 			self.partner_auth_token = partner['partnerAuthToken']
 			
 			# sync
 			pandora_time = int(crypt.pandora_decrypt(partner['syncTime'])[4:14])
 			self.time_offset = pandora_time - time.time()
-			
-			# user login
-			user = self.do_request('auth.userLogin', True, True, username=user, password=pwd, loginType="user")
-			self.user_id = user['userId']
-			self.user_auth_token = user['userAuthToken']
+			#
+			## user login
+			#user = self.do_request('auth.userLogin', True, True, username=user, password=pwd, loginType="user")
+			#self.user_id = user['userId']
+			#self.user_auth_token = user['userAuthToken']
 			
 			return True
 		except:
 			self.partner_id = None
 			self.partner_auth_token = None
-			self.user_id = None
-			self.user_auth_token = None
-			self.time_offset = None
+			#self.user_id = None
+			#self.user_auth_token = None
+			#self.time_offset = None
 			
 			return False
+
+	def get_user_authentication(self, user, password):
+		try:
+			user = self.do_request('auth.userLogin', True, True, None, username = user, password = password, loginType = "user")
+			return {'userId': user['userId'], 'userAuthToken': user['userAuthToken']}
+		except:
+			return None
+
+	def get_stations(self, user):
+		return self.do_request('user.getStationList', False, True, user)['stations']
 	
-	def get_stations(self):
-		return self.do_request('user.getStationList', False, True)['stations']
-	
-	def get_fragment(self, stationId=None, additional_format="mp3"):
-		songlist = self.do_request('station.getPlaylist', True, True, stationToken=stationId, additionalAudioUrl=self.AUDIO_FORMAT_MAP[additional_format])['items']
+	def get_fragment(self, user, stationId=None, additional_format="mp3"):
+		songlist = self.do_request('station.getPlaylist', True, True, user, stationToken=stationId, additionalAudioUrl=self.AUDIO_FORMAT_MAP[additional_format])['items']
 				
 		self.curStation = stationId
 		self.curFormat = format
 		
 		return songlist
 	
-	def do_request(self, method, secure, crypted, **kwargs):
+	def do_request(self, method, secure, crypted, user, **kwargs):
 		url_arg_strings = []
 		if self.partner_id:
 			url_arg_strings.append('partner_id=%s' % self.partner_id)
-		if self.user_id:
-			url_arg_strings.append('user_id=%s' % self.user_id)
-		if self.user_auth_token:
-			url_arg_strings.append('auth_token=%s'%urllib.quote_plus(self.user_auth_token))
+		if user:
+			url_arg_strings.append('user_id=%s' % user['userId'])
+		if user:
+			url_arg_strings.append('auth_token=%s'%urllib.quote_plus(user['userAuthToken']))
 		elif self.partner_auth_token:
 			url_arg_strings.append('auth_token=%s' % urllib.quote_plus(self.partner_auth_token))
 		
@@ -83,8 +88,8 @@ class PandoraConnection(object):
 		
 		if self.time_offset:
 			kwargs['syncTime'] = int(time.time()+self.time_offset)
-		if self.user_auth_token:
-			kwargs['userAuthToken'] = self.user_auth_token
+		if user:
+			kwargs['userAuthToken'] = user['userAuthToken']
 		elif self.partner_auth_token:
 			kwargs['partnerAuthToken'] = self.partner_auth_token
 		data = json.dumps(kwargs)
@@ -99,6 +104,7 @@ class PandoraConnection(object):
 
 		# parse result
 		tree = json.loads(text)
+		print tree
 		if tree['stat'] == 'fail':
 			code = tree['code']
 			msg = tree['message']
@@ -122,11 +128,15 @@ if __name__ == "__main__":
 	password = raw_input()
 	
 	# authenticate
-	print "Authenthicated: " + str(pandora.authenticate(username, password))
+	pandora.authenticate_connection
+	user = pandora.get_user_authentication(username, password)
+	print "Authenthicated: " + str(user)
+	if not user:
+		raise Exception("Not authenticated")
 	
 	# output stations (without QuickMix)
 	print "users stations:"
-	for station in pandora.getStations():
+	for station in pandora.get_stations(user):
 		if station['isQuickMix']: 
 			quickmix = station
 			print "\t" + station['stationName'] + "*"
