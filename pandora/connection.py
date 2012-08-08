@@ -2,7 +2,6 @@ import json
 import urllib
 import urllib2
 import time
-
 import crypt
 
 class AuthenticationError(Exception):
@@ -23,9 +22,10 @@ class PandoraConnection(object):
 	AUDIO_FORMAT_MAP = {'aac': 'HTTP_64_AACPLUS_ADTS',
 						'mp3': 'HTTP_128_MP3'}
 	
-	def __init__(self):
+	def __init__(self, proxies={}):
 		self.rid = "%07i" % (time.time() % 1e7)
 		self.timedelta = 0
+		self.opener = urllib2.build_opener((urllib2.ProxyHandler(proxies)))
 		self.authenticate_connection()
 		
 	def authenticate_connection(self):
@@ -45,19 +45,20 @@ class PandoraConnection(object):
 			#self.user_auth_token = user['userAuthToken']
 			
 			return True
-		except:
+		except Exception as e:
 			self.partner_id = None
 			self.partner_auth_token = None
 			#self.user_id = None
 			#self.user_auth_token = None
 			#self.time_offset = None
+			print repr(e)
 			
 			return False
 
-	def get_user_authentication(self, user, password):
+	def get_user_authentication(self, user, password, cryptedCred = None):
 		try:
-			user = self.do_request('auth.userLogin', True, True, None, username = user, password = password, loginType = "user")
-			return {'userId': user['userId'], 'userAuthToken': user['userAuthToken']}
+			auth = self.do_request('auth.userLogin', True, True, None, username = user, password = password, loginType = "user")
+			return {'userId': auth['userId'], 'userAuthToken': auth['userAuthToken']}
 		except:
 			return None
 
@@ -95,16 +96,19 @@ class PandoraConnection(object):
 		data = json.dumps(kwargs)
 		
 		if crypted:
-			data = crypt.pandora_encrypt(data)
+			try:
+				cryptedAppend = kwargs.pop('cryptedAppend')
+				data = crypt.pandora_join_encrypt(json.dumps(kwargs), cryptedAppend)
+			except KeyError:
+				data = crypt.pandora_encrypt(data)
 
 		# execute request
-		req = urllib2.Request(url, data, {'User-agent': "02strich", 'Content-type': 'text/plain'})
-		response = urllib2.urlopen(req)
+		req = urllib2.Request(url, data, {'User-agent': "walkman", 'Content-type': 'text/plain'})
+		response = self.opener.open(req)
 		text = response.read()
 
 		# parse result
 		tree = json.loads(text)
-		print tree
 		if tree['stat'] == 'fail':
 			code = tree['code']
 			msg = tree['message']

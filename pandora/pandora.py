@@ -20,11 +20,12 @@ class Pandora(object):
 	
 	def get_next_song(self, user, stationId):
 		# get more songs
-		if len(self.backlog) < 2:
-			self.backlog = self.connection.get_fragment(user, station_id) + self.backlog
+	#	if len(self.backlog) < 2:
+	#		self.backlog = self.connection.get_fragment(user, stationId) + self.backlog
 		
 		# get next song
-		return self.backlog.pop()
+	#	return self.backlog.pop()
+		return self.connection.get_fragment(user, stationId)
 		
 		
 if __name__ == "__main__":
@@ -49,7 +50,7 @@ if __name__ == "__main__":
 	
 	# authenticate
 	user = pandora.authenticate(username, password)
-	print "Authenthicated: " + str(user)
+	print "Authenticated: " + str(user)
 	
 	# output stations (without QuickMix)
 	print "users stations:"
@@ -67,9 +68,11 @@ if __name__ == "__main__":
 	
 	# get one song from quickmix
 	print "next song from quickmix:"
-	n =  pandora.get_next_song(user, quickmix)
+	n =  pandora.get_next_song(user, quickmix)[0]
 	print n['artistName'] + ': ' + n['songName']
+	print n['additionalAudioUrl']
 	print n['audioUrlMap']['highQuality']['audioUrl']
+	print n.keys()
 	
 	# download it
 	#u = urllib2.urlopen(next['audioUrlMap']['highQuality']['audioUrl'])

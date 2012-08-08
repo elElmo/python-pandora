@@ -180,3 +180,10 @@ def pandora_encrypt(s):
 
 def pandora_decrypt(s):
 	return "".join([blowfish_decode.decrypt(pad(s[i:i+16].decode('hex'), 8)) for i in xrange(0, len(s), 16)]).rstrip('\x08')
+
+def pandora_join_encrypt(s, append):
+	crypted = pandora_encrypt(s.replace('}', ','))
+	crypted += append
+	crypted += pandora_encrypt('}')
+	return crypted
+
